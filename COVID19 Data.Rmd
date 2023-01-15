@@ -1,0 +1,90 @@
+---
+title: "COVID19 Data"
+author: "Mike Prodo"
+date: "11/18/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+```
+
+## The Data
+
+The data being used for this project is COVID 19 cases in the US reported from Johns Hopkins. It is on their github site at https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_time_series. This data set is time_series_covid19_confirmed_US.csv and it contains the number of reported COVID 19 cases in each county of each state dating back to March 22, 2020.
+
+Libraries used in this project are ggplot2.
+
+Reading in the data:
+```{r read}
+covid = read.csv("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv")
+```
+
+For this project I will be looking at COVID 19 cases in the state of Virginia.
+
+Cleaning the data:
+```{r clean}
+# extract Virginia data
+va = covid[covid[,"Province_State"] == "Virginia",]
+ct = covid[covid[,"Province_State"] == "Connecticut",]
+```
+
+## Virginia Heat Map
+
+I will create a heat map for the number of cases in Virginia on November 19, 2021.
+
+Creating a heat map:
+```{r heat_map}
+# Data frame for heat map
+ct_yest = data.frame(Long = rep(ct$Long_,ct[,679]/100), Lat = rep(ct$Lat,ct[,679]/100))
+
+# Heat map
+ggplot() + stat_density2d(data = ct_yest, aes(x = Long, y = Lat, fill = ..density..), geom = 'tile', 
+                          contour = F) + scale_fill_gradient(low = "white",high = "red") + xlim(-74,-71.5) + ylim(41,42)
+```
+
+Looking at the heat map, most of the cases in Virginia are on the eastern border of the state, namely Northern Virginia as well as the Virginia Beach area. This makes sense as populations in those areas are much greater than the rest of the state.
+
+## Recent COVID Trend
+
+I want to look at trends in cases in Virginia over the past 60 days and try to fit a model to the data.
+
+Plot for last two months:
+```{r plot}
+# Data frame for last 60 days
+days = 60
+month = data.frame(matrix(ncol = 2, nrow = days))
+colnames(month) = c("Date","Cases")
+month$Date = days:1
+month$Cases = colSums(va[,(ncol(va)-days+1):ncol(va)])
+
+plot(x = month$Date, y = month$Cases, xlim = rev(range(month$Date)), 
+     main = "COVID 19 Cases Last 60 Days", xlab = "Number of Days Ago", ylab = "Cases")
+```
+
+Looking at the plot, it appears to be mostly linear, which means the number of new cases in Virginia are about the same every day.
+
+Modeling the data:
+```{r model}
+model = lm(month$Cases~month$Date)
+summary(model)
+```
+
+The linear model for predicting the number of new cases in Virginia each day is $961072.66 - 1831.35x$ where x is the number of days ago. The Adjusted R-squared value for this model is 0.9732, meaning it is a great fit for the data.
+
+Fitting the model:
+```{r fit}
+pred = predict(model, x = 100:1)
+plot(x = month$Date, y = month$Cases, xlim = rev(range(month$Date)), 
+     main = "COVID 19 Cases Last 60 Days", xlab = "Number of Days Ago", ylab = "Cases")
+lines(rev(pred), type = "l", col = "red")
+```
+
+Adding the model to the plot confirms the model is a good fit for the data.
+
+## Conclusion
+
+In conclusion, most of the cases in Virginia are in Northern Virginia (outside of DC) and the Virginia Beach area. You can accurately predict the number of cumulative cases in Virginia in the last 60 days with the formula $961072.66 - 1831.35x$ where x is the number of days ago. This linear model has an Adjusted R-squared value of 0.9732, which means the model is a really good fit for the data. If you wanted to predict the number of total cases in the future you could use a negative value for x in the equation, i.e. 5 days in the future would be x=-5. If you wanted the number of new cases, subtract the number of previous cases from the output of the equation.
+
+Possible bias in this project is that this model only applies to the state of Virginia as a whole; it can be very different if you were looking at another state or even one individual county in Virginia. Another bias could be that the model was using data from the past 60 days. Using data from the past year will likely yield a very different model that may not even be linear.
